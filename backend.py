@@ -8,6 +8,7 @@ from groq import Groq
 import firebase_admin
 from firebase_admin import credentials, auth
 from dotenv import load_dotenv
+from ahocorasick import Automaton
 load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Enable CORS
@@ -38,10 +39,16 @@ keywords = {
     'apparel': ['clothing', 'jeans', 'shirt'],
     'miscellaneous': ['gift', 'miscellaneous']
 }
+automaton=Automaton()
+for category, words in keywords.items():
+    for word in words:
+        automaton.add_word(word, category)  # Store category with the word
+
+automaton.make_automaton()
 def categorize_transaction(row):
-    for category, words in keywords.items():
-        if any(word in str(row['to']).lower() or word in str(row['note']).lower() for word in words):
-            return category
+    text = f"{str(row['to']).lower()} {str(row['note']).lower()}"
+    for _, category in automaton.iter(text):
+        return category  # Return first match
     return 'miscellaneous'
 
 
@@ -55,7 +62,7 @@ def verify_firebase_token():
     print(id_token)
     try:
         decoded_token = auth.verify_id_token(id_token)
-        return decoded_token  # ✅ Returns user info
+        return decoded_token  # ✅ Returns user info    
     except Exception as e:
         print("Token verification failed:", str(e))
         return None
